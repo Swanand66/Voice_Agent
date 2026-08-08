@@ -100,9 +100,15 @@ transport_params = {
     "webrtc": lambda: TransportParams(
         audio_in_enabled=True,
         audio_out_enabled=True,
-        # Send audio in 40ms chunks (default is 10ms) — reduces jitter over
-        # TURN-over-TCP by giving the receiver a bigger cushion between packets.
-        audio_out_10ms_chunks=4,
+        # 80ms chunks — fewer packets → less per-packet TCP overhead over the
+        # TURN relay. Still well inside conversational latency.
+        audio_out_10ms_chunks=8,
+        # CRITICAL for smooth playback: do NOT insert silence when the queue
+        # briefly empties (Soniox chunk jitter, first-response cold start,
+        # Render CPU hiccups). Default True causes audible mid-word cuts and
+        # choppy first-word playback. Waiting a few ms for real audio is
+        # imperceptible; inserted silence is not.
+        audio_out_auto_silence=False,
     ),
 }
 
