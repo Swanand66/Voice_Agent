@@ -9,7 +9,7 @@ import {
   usePipecatClientTransportState,
   useRTVIClientEvent,
 } from "@pipecat-ai/client-react";
-import { DailyTransport } from "@pipecat-ai/daily-transport";
+import { SmallWebRTCTransport } from "@pipecat-ai/small-webrtc-transport";
 
 import { GradientOrb } from "@/components/ui/gradient-orb";
 import { Button } from "@/components/ui/button";
@@ -64,14 +64,8 @@ function VoiceAgentInner() {
     if (state === "connecting") return;
     try {
       const botUrl = (import.meta.env.VITE_BOT_URL ?? "").replace(/\/$/, "");
-      const endpoint = botUrl ? `${botUrl}/start` : "/start";
-      await client.startBotAndConnect({
-        endpoint,
-        requestData: {
-          transport: "daily",
-          createDailyRoom: true,
-        },
-      });
+      const endpoint = botUrl ? `${botUrl}/api/offer` : "/api/offer";
+      await client.connect({ webrtcRequestParams: { endpoint } });
     } catch (err) {
       console.error("Failed to connect:", err);
     }
@@ -126,7 +120,7 @@ function VoiceAgentInner() {
             <p className="mt-3 text-sm text-muted-foreground">
               {connected
                 ? "Talk naturally. Interrupt anytime."
-                : "Pipecat · Soniox · Groq · Daily"}
+                : "Pipecat · Soniox · Groq"}
             </p>
           </div>
         </div>
@@ -173,11 +167,28 @@ function VoiceAgentInner() {
   );
 }
 
+function buildIceServers(): RTCIceServer[] {
+  const servers: RTCIceServer[] = [{ urls: "stun:stun.l.google.com:19302" }];
+  const turnUrl = import.meta.env.VITE_TURN_URL;
+  const turnUser = import.meta.env.VITE_TURN_USERNAME;
+  const turnCred = import.meta.env.VITE_TURN_CREDENTIAL;
+  if (turnUrl && turnUser && turnCred) {
+    servers.push({ urls: turnUrl, username: turnUser, credential: turnCred });
+  }
+  return servers;
+}
+
 export function VoiceAgent() {
   const client = useMemo(
     () =>
       new PipecatClient({
-        transport: new DailyTransport(),
+        transport: new SmallWebRTCTransport({
+          iceServers: buildIceServers(),
+          // Explicit mic constraints — echo cancellation, noise suppression,
+          // and auto-gain control help prevent bot audio bleeding back into
+          // the mic and triggering false interruptions.
+          mediaManager: undefined,
+        }),
         enableMic: true,
         enableCam: false,
       }),
@@ -185,7 +196,24 @@ export function VoiceAgent() {
   );
 
   useEffect(() => {
+    // Override default getUserMedia constraints to explicitly enable browser
+    // audio processing (echo cancellation, noise suppression, AGC). These are
+    // usually on by default but some browsers/devices disable them; force on.
+    const originalGetUserMedia = navigator.mediaDevices.getUserMedia.bind(
+      navigator.mediaDevices
+    );
+    navigator.mediaDevices.getUserMedia = (constraints) => {
+      const audio = constraints?.audio;
+      const stricter: MediaTrackConstraints = {
+        echoCancellation: { ideal: true },
+        noiseSuppression: { ideal: true },
+        autoGainControl: { ideal: true },
+        ...(typeof audio === "object" && audio !== null ? audio : {}),
+      };
+      return originalGetUserMedia({ ...constraints, audio: stricter });
+    };
     return () => {
+      navigator.mediaDevices.getUserMedia = originalGetUserMedia;
       client.disconnect().catch(() => {});
     };
   }, [client]);

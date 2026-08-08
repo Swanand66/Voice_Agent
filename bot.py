@@ -3,9 +3,49 @@ import os
 from dotenv import load_dotenv
 from loguru import logger
 
+from pipecat.frames.frames import BotStartedSpeakingFrame, BotStoppedSpeakingFrame, Frame
+from pipecat.turns.user_mute.base_user_mute_strategy import BaseUserMuteStrategy
+
+
+def _install_ice_servers_patch() -> None:
+    """Inject STUN + TURN into the runner's WebRTC handler at import time.
+
+    The Pipecat runner instantiates SmallWebRTCRequestHandler without
+    ice_servers, so on hosted platforms (Render) the server only advertises
+    private IPs. Reading TURN_* env vars here and monkey-patching lets the
+    server advertise a TURN-relayed candidate that browsers can reach.
+    """
+    turn_url = os.environ.get("TURN_URL")
+    if not turn_url:
+        return
+    from pipecat.transports.smallwebrtc.connection import IceServer
+    from pipecat.transports.smallwebrtc.request_handler import (
+        SmallWebRTCRequestHandler,
+    )
+
+    ice_servers = [
+        IceServer(urls=["stun:stun.l.google.com:19302"]),
+        IceServer(
+            urls=[turn_url],
+            username=os.environ.get("TURN_USERNAME"),
+            credential=os.environ.get("TURN_CREDENTIAL"),
+        ),
+    ]
+    _orig = SmallWebRTCRequestHandler.__init__
+
+    def _patched(self, *args, **kwargs):
+        _orig(self, *args, **kwargs)
+        self.update_ice_servers(ice_servers)
+        logger.info(f"Injected ICE servers: STUN + TURN ({turn_url})")
+
+    SmallWebRTCRequestHandler.__init__ = _patched
+
+
 load_dotenv(override=True)
+_install_ice_servers_patch()
 
 from pipecat.audio.vad.silero import SileroVADAnalyzer
+from pipecat.audio.vad.vad_analyzer import VADParams
 from pipecat.frames.frames import LLMRunFrame
 from pipecat.pipeline.pipeline import Pipeline
 from pipecat.pipeline.worker import PipelineParams, PipelineWorker
@@ -30,15 +70,35 @@ from pipecat.services.groq.llm import GroqLLMService
 from pipecat.services.soniox.stt import SonioxSTTService
 from pipecat.services.soniox.tts import SonioxTTSService
 from pipecat.transcriptions.language import Language
-from pipecat.transports.base_transport import BaseTransport
-from pipecat.transports.daily.transport import DailyParams
+from pipecat.transports.base_transport import BaseTransport, TransportParams
 from pipecat.workers.runner import WorkerRunner
 
+
+class MuteDuringBotSpeechStrategy(BaseUserMuteStrategy):
+    """Mute the user mic whenever the bot is speaking.
+
+    Prevents the bot's own audio (echoed back through the user's speakers or
+    room mic) from triggering VAD-detected "user speaking" events that cause
+    the pipeline to interrupt itself mid-word.
+    """
+
+    def __init__(self):
+        super().__init__()
+        self._bot_speaking = False
+
+    async def process_frame(self, frame: Frame) -> bool:
+        await super().process_frame(frame)
+        if isinstance(frame, BotStartedSpeakingFrame):
+            self._bot_speaking = True
+        elif isinstance(frame, BotStoppedSpeakingFrame):
+            self._bot_speaking = False
+        return self._bot_speaking
+
+
 transport_params = {
-    "daily": lambda: DailyParams(
+    "webrtc": lambda: TransportParams(
         audio_in_enabled=True,
         audio_out_enabled=True,
-        vad_analyzer=SileroVADAnalyzer(),
     ),
 }
 
@@ -73,6 +133,16 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
         settings=SonioxTTSService.Settings(voice="Maya"),
     )
 
+    # Aggressive VAD tuning to reduce false triggers from bot echo / room noise.
+    # Defaults: confidence=0.7, start_secs=0.2, stop_secs=0.2, min_volume=0.6
+    vad_params = VADParams(
+        confidence=0.85,
+        start_secs=0.4,
+        stop_secs=0.6,
+        min_volume=0.7,
+    )
+    vad = SileroVADAnalyzer(params=vad_params)
+
     context = LLMContext()
     turn_strategies = UserTurnStrategies(
         start=[VADUserTurnStartStrategy(), TranscriptionUserTurnStartStrategy()],
@@ -81,8 +151,9 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
     user_aggregator, assistant_aggregator = LLMContextAggregatorPair(
         context,
         user_params=LLMUserAggregatorParams(
-            vad_analyzer=SileroVADAnalyzer(),
+            vad_analyzer=vad,
             user_turn_strategies=turn_strategies,
+            user_mute_strategies=[MuteDuringBotSpeechStrategy()],
         ),
     )
 
