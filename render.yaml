@@ -16,3 +16,11 @@ services:
         sync: false
       - key: PIPECAT_IDLE_TIMEOUT_SECS
         value: "600"
+      # TURN server for WebRTC media relay (Render blocks direct UDP)
+      # Fill these in via the Render dashboard from your Metered.ca credentials
+      - key: TURN_URL
+        sync: false
+      - key: TURN_USERNAME
+        sync: false
+      - key: TURN_CREDENTIAL
+        sync: false

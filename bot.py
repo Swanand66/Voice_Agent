@@ -3,6 +3,41 @@ import os
 from dotenv import load_dotenv
 from loguru import logger
 
+# --- Inject TURN/STUN servers into the runner's WebRTC handler ---
+# The Pipecat runner instantiates SmallWebRTCRequestHandler without ice_servers,
+# so on hosted platforms (Render, Fly, etc.) the server only advertises private
+# IPs and browsers can't reach it. This monkey-patch reads TURN_* env vars and
+# injects them into every handler created after import.
+def _install_ice_servers_patch() -> None:
+    turn_url = os.environ.get("TURN_URL")
+    if not turn_url:
+        return
+    from pipecat.transports.smallwebrtc.connection import IceServer
+    from pipecat.transports.smallwebrtc.request_handler import (
+        SmallWebRTCRequestHandler,
+    )
+
+    ice_servers = [
+        IceServer(urls=["stun:stun.l.google.com:19302"]),
+        IceServer(
+            urls=[turn_url],
+            username=os.environ.get("TURN_USERNAME"),
+            credential=os.environ.get("TURN_CREDENTIAL"),
+        ),
+    ]
+    _orig = SmallWebRTCRequestHandler.__init__
+
+    def _patched(self, *args, **kwargs):
+        _orig(self, *args, **kwargs)
+        self.update_ice_servers(ice_servers)
+        logger.info(f"Injected ICE servers: STUN + TURN ({turn_url})")
+
+    SmallWebRTCRequestHandler.__init__ = _patched
+
+
+load_dotenv(override=True)
+_install_ice_servers_patch()
+
 from pipecat.audio.vad.silero import SileroVADAnalyzer
 from pipecat.evals.transport import EvalTransportParams
 from pipecat.frames.frames import LLMRunFrame
@@ -21,8 +56,6 @@ from pipecat.services.soniox.tts import SonioxTTSService
 from pipecat.transcriptions.language import Language
 from pipecat.transports.base_transport import BaseTransport, TransportParams
 from pipecat.workers.runner import WorkerRunner
-
-load_dotenv(override=True)
 
 transport_params = {
     "webrtc": lambda: TransportParams(

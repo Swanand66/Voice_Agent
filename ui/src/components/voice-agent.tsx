@@ -167,11 +167,22 @@ function VoiceAgentInner() {
   );
 }
 
+function buildIceServers(): RTCIceServer[] {
+  const servers: RTCIceServer[] = [{ urls: "stun:stun.l.google.com:19302" }];
+  const turnUrl = import.meta.env.VITE_TURN_URL;
+  const turnUser = import.meta.env.VITE_TURN_USERNAME;
+  const turnCred = import.meta.env.VITE_TURN_CREDENTIAL;
+  if (turnUrl && turnUser && turnCred) {
+    servers.push({ urls: turnUrl, username: turnUser, credential: turnCred });
+  }
+  return servers;
+}
+
 export function VoiceAgent() {
   const client = useMemo(
     () =>
       new PipecatClient({
-        transport: new SmallWebRTCTransport(),
+        transport: new SmallWebRTCTransport({ iceServers: buildIceServers() }),
         enableMic: true,
         enableCam: false,
       }),
