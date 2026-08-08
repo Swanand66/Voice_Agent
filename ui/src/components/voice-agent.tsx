@@ -13,6 +13,9 @@ import { SmallWebRTCTransport } from "@pipecat-ai/small-webrtc-transport";
 
 import { GradientOrb } from "@/components/ui/gradient-orb";
 import { Button } from "@/components/ui/button";
+import { StarButton } from "@/components/ui/star-button";
+import { DotPattern } from "@/components/ui/dot-pattern";
+import { cn } from "@/lib/utils";
 
 type BotState = "idle" | "connecting" | "listening" | "thinking" | "speaking";
 
@@ -39,11 +42,11 @@ function useBotState(): BotState {
 }
 
 const stateConfig: Record<BotState, { label: string; hue: number; rotation: number; noise: number }> = {
-  idle:       { label: "Tap to talk",      hue:   0, rotation: 0.15, noise: 0.5  },
+  idle:       { label: "Tap to talk",      hue:   0, rotation: 0.35, noise: 0.75 },
   connecting: { label: "Connecting…",      hue:  40, rotation: 1.2,  noise: 1.0  },
-  listening:  { label: "Listening",        hue: 140, rotation: 0.4,  noise: 0.9  },
-  thinking:   { label: "Thinking",         hue:  60, rotation: 0.8,  noise: 0.65 },
-  speaking:   { label: "Speaking",         hue: 240, rotation: 0.6,  noise: 1.1  },
+  listening:  { label: "Listening",        hue: 140, rotation: 0.5,  noise: 0.95 },
+  thinking:   { label: "Thinking",         hue:  60, rotation: 0.8,  noise: 0.7  },
+  speaking:   { label: "Speaking",         hue: 240, rotation: 0.7,  noise: 1.15 },
 };
 
 function VoiceAgentInner() {
@@ -91,16 +94,26 @@ function VoiceAgentInner() {
         />
       </div>
 
+      <DotPattern
+        cx={1}
+        cy={1}
+        cr={1}
+        className={cn(
+          "fill-white/25",
+          "[mask-image:radial-gradient(900px_circle_at_center,white,transparent)]"
+        )}
+      />
+
       <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/30 via-transparent to-black/60" />
 
-      <div className="relative z-10 flex h-full flex-col items-center justify-between px-6 py-10">
-        <header className="flex w-full max-w-4xl items-center justify-between">
-          <div className="text-sm font-medium tracking-wide text-muted-foreground">
-            VOICE AGENT
+      <div className="relative z-10 flex h-full flex-col items-center justify-between px-4 py-6 sm:px-6 sm:py-10">
+        <header className="flex w-full max-w-4xl items-center justify-between gap-3">
+          <div className="text-xs font-medium tracking-widest text-muted-foreground sm:text-sm">
+            MAYA
           </div>
-          <div className="flex items-center gap-2 rounded-full border border-border/50 bg-background/40 px-3 py-1 text-xs text-muted-foreground backdrop-blur">
+          <div className="flex shrink-0 items-center gap-2 rounded-full border border-border/50 bg-background/40 px-2.5 py-1 text-[11px] text-muted-foreground backdrop-blur sm:px-3 sm:text-xs">
             <span
-              className={`h-2 w-2 rounded-full ${
+              className={`h-2 w-2 shrink-0 rounded-full ${
                 state === "idle" ? "bg-muted-foreground" :
                 state === "connecting" ? "bg-yellow-400 animate-pulse" :
                 state === "speaking" ? "bg-blue-400 animate-pulse" :
@@ -112,10 +125,10 @@ function VoiceAgentInner() {
           </div>
         </header>
 
-        <div className="flex flex-col items-center gap-8 text-center">
-          <div className="max-w-xl">
-            <h1 className="text-4xl font-medium tracking-tight text-foreground md:text-5xl">
-              {connected ? cfg.label : "Say hello."}
+        <div className="flex w-full flex-col items-center gap-6 text-center sm:gap-8">
+          <div className="w-full max-w-xl px-2">
+            <h1 className="text-2xl font-medium tracking-tight text-foreground break-words sm:text-4xl md:text-5xl">
+              {connected ? cfg.label : "Say hello to Maya."}
             </h1>
             <p className="mt-3 text-sm text-muted-foreground">
               {connected
@@ -138,15 +151,13 @@ function VoiceAgentInner() {
             </Button>
           )}
 
-          <Button
+          <StarButton
             onClick={handleToggle}
             disabled={state === "connecting"}
-            size="lg"
-            className={`h-14 rounded-full px-8 text-base font-medium shadow-lg backdrop-blur transition-all ${
-              connected
-                ? "bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                : "bg-white text-black hover:bg-white/90"
-            }`}
+            lightColor="transparent"
+            backgroundColor="rgba(0,0,0,0.08)"
+            duration={connected ? 1.5 : 3}
+            className="h-12 px-8 text-base bg-white shadow-xl shadow-black/40 font-semibold"
           >
             {state === "connecting" ? (
               <>
@@ -158,7 +169,7 @@ function VoiceAgentInner() {
             ) : (
               "Start talking"
             )}
-          </Button>
+          </StarButton>
         </footer>
       </div>
 

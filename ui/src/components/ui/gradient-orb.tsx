@@ -208,7 +208,10 @@ function GradientScene({ config }: { config: Required<GradientOrbConfig> }) {
     const u = materialRef.current.uniforms;
     if (!u.iTime || !u.hue || !u.rot || !u.iResolution) return;
     u.iTime.value = t;
-    u.hue.value = config.hue;
+    // Ambient hue drift — subtle continuous color shift so the background
+    // always feels alive even when the bot is idle. ±35° at 0.05 Hz.
+    const ambientHue = Math.sin(t * 0.3) * 35;
+    u.hue.value = config.hue + ambientHue;
     u.rot.value = rotRef.current;
     u.iResolution.value.set(
       size.width * viewport.dpr,

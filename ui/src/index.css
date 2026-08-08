@@ -40,3 +40,26 @@
     overflow: hidden;
   }
 }
+
+/* StarButton — light traces the border via CSS offset-path */
+@keyframes star-btn {
+  0% {
+    offset-distance: 0%;
+  }
+  100% {
+    offset-distance: 100%;
+  }
+}
+
+.animate-star-btn {
+  animation: star-btn calc(var(--duration) * 1s) linear infinite;
+}
+
+/* Enable dark: variants globally — our theme is always dark */
+html {
+  color-scheme: dark;
+}
+html.dark,
+:root {
+  /* placeholder so `dark:` variants trigger via the strategy below */
+}
