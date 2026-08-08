@@ -1,0 +1,4 @@
+pipecat-ai[silero,soniox,webrtc,groq]>=0.0.60
+python-dotenv>=1.0.1
+fastapi>=0.115
+uvicorn[standard]>=0.30
