@@ -1,3 +1,4 @@
+import asyncio
 import os
 
 from dotenv import load_dotenv
@@ -99,6 +100,9 @@ transport_params = {
     "webrtc": lambda: TransportParams(
         audio_in_enabled=True,
         audio_out_enabled=True,
+        # Send audio in 40ms chunks (default is 10ms) — reduces jitter over
+        # TURN-over-TCP by giving the receiver a bigger cushion between packets.
+        audio_out_10ms_chunks=4,
     ),
 }
 
@@ -130,7 +134,9 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
 
     tts = SonioxTTSService(
         api_key=os.environ["SONIOX_API_KEY"],
-        settings=SonioxTTSService.Settings(voice="Maya"),
+        settings=SonioxTTSService.Settings(
+            voice=os.environ.get("SONIOX_VOICE", "Iris"),
+        ),
     )
 
     # Aggressive VAD tuning to reduce false triggers from bot echo / room noise.
@@ -180,7 +186,12 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
 
     @transport.event_handler("on_client_connected")
     async def on_client_connected(transport, client):
-        logger.info("Client connected")
+        logger.info("Client connected — warming up media path before greeting")
+        # on_client_connected fires when the peer connection is established,
+        # but RTP media flow needs a moment to stabilize (especially over TURN
+        # relay). Delaying the first TTS output lets the audio channel warm up
+        # so the greeting doesn't stutter.
+        await asyncio.sleep(1.0)
         context.add_message(
             {"role": "developer", "content": "Please introduce yourself to the user."}
         )
