@@ -4,11 +4,12 @@ services:
     runtime: python
     plan: free
     region: oregon
-    pythonVersion: "3.12"
     buildCommand: pip install -r requirements.txt && pip install pipecat-ai-prebuilt
     startCommand: python bot.py --host 0.0.0.0 --port $PORT --proxy $RENDER_EXTERNAL_HOSTNAME
     healthCheckPath: /
     envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.4"
       - key: SONIOX_API_KEY
         sync: false
       - key: GROQ_API_KEY
