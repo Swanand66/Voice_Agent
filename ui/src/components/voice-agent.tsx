@@ -9,7 +9,7 @@ import {
   usePipecatClientTransportState,
   useRTVIClientEvent,
 } from "@pipecat-ai/client-react";
-import { SmallWebRTCTransport } from "@pipecat-ai/small-webrtc-transport";
+import { DailyTransport } from "@pipecat-ai/daily-transport";
 
 import { GradientOrb } from "@/components/ui/gradient-orb";
 import { Button } from "@/components/ui/button";
@@ -64,8 +64,14 @@ function VoiceAgentInner() {
     if (state === "connecting") return;
     try {
       const botUrl = (import.meta.env.VITE_BOT_URL ?? "").replace(/\/$/, "");
-      const endpoint = botUrl ? `${botUrl}/api/offer` : "/api/offer";
-      await client.connect({ webrtcRequestParams: { endpoint } });
+      const endpoint = botUrl ? `${botUrl}/start` : "/start";
+      await client.startBotAndConnect({
+        endpoint,
+        requestData: {
+          transport: "daily",
+          createDailyRoom: true,
+        },
+      });
     } catch (err) {
       console.error("Failed to connect:", err);
     }
@@ -120,7 +126,7 @@ function VoiceAgentInner() {
             <p className="mt-3 text-sm text-muted-foreground">
               {connected
                 ? "Talk naturally. Interrupt anytime."
-                : "Pipecat · Soniox · Groq"}
+                : "Pipecat · Soniox · Groq · Daily"}
             </p>
           </div>
         </div>
@@ -167,22 +173,11 @@ function VoiceAgentInner() {
   );
 }
 
-function buildIceServers(): RTCIceServer[] {
-  const servers: RTCIceServer[] = [{ urls: "stun:stun.l.google.com:19302" }];
-  const turnUrl = import.meta.env.VITE_TURN_URL;
-  const turnUser = import.meta.env.VITE_TURN_USERNAME;
-  const turnCred = import.meta.env.VITE_TURN_CREDENTIAL;
-  if (turnUrl && turnUser && turnCred) {
-    servers.push({ urls: turnUrl, username: turnUser, credential: turnCred });
-  }
-  return servers;
-}
-
 export function VoiceAgent() {
   const client = useMemo(
     () =>
       new PipecatClient({
-        transport: new SmallWebRTCTransport({ iceServers: buildIceServers() }),
+        transport: new DailyTransport(),
         enableMic: true,
         enableCam: false,
       }),

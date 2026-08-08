@@ -5,7 +5,7 @@ services:
     plan: free
     region: oregon
     buildCommand: pip install -r requirements.txt && pip install pipecat-ai-prebuilt
-    startCommand: python bot.py --host 0.0.0.0 --port $PORT --proxy $RENDER_EXTERNAL_HOSTNAME
+    startCommand: python bot.py -t daily --host 0.0.0.0 --port $PORT --proxy $RENDER_EXTERNAL_HOSTNAME
     healthCheckPath: /
     envVars:
       - key: PYTHON_VERSION
@@ -14,13 +14,7 @@ services:
         sync: false
       - key: GROQ_API_KEY
         sync: false
+      - key: DAILY_API_KEY
+        sync: false
       - key: PIPECAT_IDLE_TIMEOUT_SECS
         value: "600"
-      # TURN server for WebRTC media relay (Render blocks direct UDP)
-      # Fill these in via the Render dashboard from your Metered.ca credentials
-      - key: TURN_URL
-        sync: false
-      - key: TURN_USERNAME
-        sync: false
-      - key: TURN_CREDENTIAL
-        sync: false
