@@ -48,6 +48,16 @@ from pipecat.processors.aggregators.llm_response_universal import (
     LLMContextAggregatorPair,
     LLMUserAggregatorParams,
 )
+from pipecat.turns.user_start.vad_user_turn_start_strategy import (
+    VADUserTurnStartStrategy,
+)
+from pipecat.turns.user_start.transcription_user_turn_start_strategy import (
+    TranscriptionUserTurnStartStrategy,
+)
+from pipecat.turns.user_stop.speech_timeout_user_turn_stop_strategy import (
+    SpeechTimeoutUserTurnStopStrategy,
+)
+from pipecat.turns.user_turn_strategies import UserTurnStrategies
 from pipecat.runner.types import RunnerArguments
 from pipecat.runner.utils import create_transport
 from pipecat.services.groq.llm import GroqLLMService
@@ -96,9 +106,20 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
     )
 
     context = LLMContext()
+    # Replace the default smart-turn stop strategy (which requires a finalized
+    # transcript flag that Soniox does not reliably send on every turn) with a
+    # VAD + speech-timeout strategy. Fires end-of-turn after VAD stop + short
+    # grace window, as long as at least one transcript arrived.
+    turn_strategies = UserTurnStrategies(
+        start=[VADUserTurnStartStrategy(), TranscriptionUserTurnStartStrategy()],
+        stop=[SpeechTimeoutUserTurnStopStrategy(user_speech_timeout=0.6)],
+    )
     user_aggregator, assistant_aggregator = LLMContextAggregatorPair(
         context,
-        user_params=LLMUserAggregatorParams(vad_analyzer=SileroVADAnalyzer()),
+        user_params=LLMUserAggregatorParams(
+            vad_analyzer=SileroVADAnalyzer(),
+            user_turn_strategies=turn_strategies,
+        ),
     )
 
     pipeline = Pipeline(
