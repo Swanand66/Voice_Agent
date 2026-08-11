@@ -15,7 +15,6 @@ import { GradientOrb } from "@/components/ui/gradient-orb";
 import { Button } from "@/components/ui/button";
 import { StarButton } from "@/components/ui/star-button";
 import { DotPattern } from "@/components/ui/dot-pattern";
-import { LiveCostPanel } from "@/components/live-cost-panel";
 import { cn } from "@/lib/utils";
 
 type BotState = "idle" | "connecting" | "listening" | "thinking" | "speaking";
@@ -186,12 +185,6 @@ function VoiceAgentInner() {
           </StarButton>
         </footer>
       </div>
-
-      {connected && (
-        <div className="pointer-events-none absolute bottom-24 left-1/2 z-10 -translate-x-1/2 sm:left-6 sm:translate-x-0">
-          <LiveCostPanel active={connected} />
-        </div>
-      )}
 
       <PipecatClientAudio />
     </div>
