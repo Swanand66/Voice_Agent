@@ -167,38 +167,51 @@ class MetricsCollector(FrameProcessor):
             bucket["llm_cost_usd"] + bucket["tts_cost_usd"] + bucket["stt_cost_usd"]
         )
 
-        try:
-            await self._ensure_session_row()
-            pool = await get_pool()
-            async with pool.acquire() as conn:
-                async with conn.transaction():
-                    await conn.execute(
-                        """INSERT INTO turns (
-                            session_id, client_id, turn_index,
-                            llm_prompt_tokens, llm_completion_tokens, llm_cost_usd,
-                            tts_chars, tts_cost_usd,
-                            stt_seconds, stt_cost_usd,
-                            total_cost_usd,
-                            llm_ttfb_ms, tts_ttfb_ms, end_to_end_ms
-                        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)""",
-                        self._session_id, self._client_id, self._turn_index,
-                        bucket["llm_prompt_tokens"], bucket["llm_completion_tokens"], bucket["llm_cost_usd"],
-                        bucket["tts_chars"], bucket["tts_cost_usd"],
-                        bucket["stt_seconds"], bucket["stt_cost_usd"],
-                        total,
-                        bucket["llm_ttfb_ms"], bucket["tts_ttfb_ms"], bucket["end_to_end_ms"],
-                    )
-                    await conn.execute(
-                        """UPDATE sessions
-                           SET ended_at = now(),
-                               turn_count = turn_count + 1,
-                               total_cost_usd = total_cost_usd + $1
-                           WHERE id = $2""",
-                        total, self._session_id,
-                    )
-        except Exception as e:
-            # Never let a metrics write break the call. Log and drop.
-            logger.error(f"[metrics] write failed: {e}")
+        # Retry the write up to 3 times with exponential backoff. Transient
+        # Supabase blips (connection resets, pooler timeouts) should not lose
+        # billable data. After 3 failures we log and drop — call itself is
+        # never blocked either way.
+        last_err: Exception | None = None
+        for attempt in range(3):
+            try:
+                await self._ensure_session_row()
+                pool = await get_pool()
+                async with pool.acquire() as conn:
+                    async with conn.transaction():
+                        await conn.execute(
+                            """INSERT INTO turns (
+                                session_id, client_id, turn_index,
+                                llm_prompt_tokens, llm_completion_tokens, llm_cost_usd,
+                                tts_chars, tts_cost_usd,
+                                stt_seconds, stt_cost_usd,
+                                total_cost_usd,
+                                llm_ttfb_ms, tts_ttfb_ms, end_to_end_ms
+                            ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+                            ON CONFLICT (session_id, turn_index) DO NOTHING""",
+                            self._session_id, self._client_id, self._turn_index,
+                            bucket["llm_prompt_tokens"], bucket["llm_completion_tokens"], bucket["llm_cost_usd"],
+                            bucket["tts_chars"], bucket["tts_cost_usd"],
+                            bucket["stt_seconds"], bucket["stt_cost_usd"],
+                            total,
+                            bucket["llm_ttfb_ms"], bucket["tts_ttfb_ms"], bucket["end_to_end_ms"],
+                        )
+                        await conn.execute(
+                            """UPDATE sessions
+                               SET ended_at = now(),
+                                   turn_count = turn_count + 1,
+                                   total_cost_usd = total_cost_usd + $1
+                               WHERE id = $2""",
+                            total, self._session_id,
+                        )
+                last_err = None
+                break
+            except Exception as e:
+                last_err = e
+                if attempt < 2:
+                    await asyncio.sleep(0.1 * (2 ** attempt))  # 100ms, 200ms
+
+        if last_err is not None:
+            logger.error(f"[metrics] write failed after 3 retries: {last_err}")
 
         logger.info(
             f"[metrics] {self._client_id}/turn {self._turn_index}: ${total:.5f} "

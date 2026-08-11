@@ -43,7 +43,7 @@ def _install_ice_servers_patch() -> None:
     SmallWebRTCRequestHandler.__init__ = _patched
 
 
-load_dotenv(override=True)
+load_dotenv(override=False)
 _install_ice_servers_patch()
 
 from pipecat.audio.vad.silero import SileroVADAnalyzer
@@ -76,6 +76,8 @@ from pipecat.transports.base_transport import BaseTransport, TransportParams
 from pipecat.workers.runner import WorkerRunner
 
 from metrics_collector import MetricsCollector
+from intent_classifier import classify_and_store
+from session_guard import SessionGuard
 
 
 class MuteDuringBotSpeechStrategy(BaseUserMuteStrategy):
@@ -125,7 +127,11 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
         api_key=os.environ["SONIOX_API_KEY"],
         settings=SonioxSTTService.Settings(
             language_hints=[Language.EN],
-            language_hints_strict=True,
+            # strict=False so a stray Hindi/Telugu word doesn't drop the whole
+            # utterance — Soniox will still bias toward EN via language_hints
+            # but won't silently discard non-matches. Prompt already handles
+            # steering back to English.
+            language_hints_strict=False,
             enable_language_identification=True,
         ),
     )
@@ -248,6 +254,7 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
     )
 
     metrics_collector = MetricsCollector(session_id=session_id, client_id=client_id)
+    session_guard = SessionGuard(context=context)
 
     pipeline = Pipeline(
         [
@@ -259,6 +266,7 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
             transport.output(),
             assistant_aggregator,
             metrics_collector,
+            session_guard,
         ]
     )
 
@@ -270,6 +278,9 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
         ),
         idle_timeout_secs=runner_args.pipeline_idle_timeout_secs,
     )
+    # SessionGuard needs a worker reference to inject the closer TTS and to
+    # cancel the pipeline on breach — wire it after both are constructed.
+    session_guard.worker = worker
 
     @transport.event_handler("on_client_connected")
     async def on_client_connected(transport, client):
@@ -289,6 +300,14 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
 
     @transport.event_handler("on_client_disconnected")
     async def on_client_disconnected(transport, client):
+        # Snapshot the transcript BEFORE cancelling the pipeline — assistant
+        # aggregator writes final turns asynchronously, so grabbing the list
+        # here is the safest atomic read. Fire-and-forget: analysis takes a
+        # few seconds and must not block cleanup.
+        transcript = list(context.messages)
+        if len(transcript) > 1:
+            asyncio.create_task(classify_and_store(session_id, transcript))
+
         logger.info("Client disconnected")
         await worker.cancel()
 

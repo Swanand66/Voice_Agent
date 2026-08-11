@@ -14,6 +14,15 @@ export type Turn = {
   end_to_end_ms: number;
 };
 
+export type Intent =
+  | "booking"
+  | "inquiry"
+  | "callback"
+  | "complaint"
+  | "chat"
+  | "refused"
+  | "other";
+
 export type Session = {
   id: string;
   client_id?: string;
@@ -21,6 +30,7 @@ export type Session = {
   ended_at: string | null;
   turn_count: number;
   total_cost_usd: number;
+  intent: Intent | null;
   turns?: Turn[];
 };
 

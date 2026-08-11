@@ -29,11 +29,22 @@ from db import get_pool, close_pool
 
 app = FastAPI(title="Voice Agent Metrics")
 
+# CORS allowlist. Set DASHBOARD_ALLOWED_ORIGIN as a comma-separated list of
+# origins in .env / Render env (e.g. "https://dash.mysite.com,http://localhost:5173").
+# Falls back to localhost dev origins only — never allow "*" in production.
+_default_dev_origins = "http://localhost:5173,http://127.0.0.1:5173"
+_origins = [
+    o.strip()
+    for o in os.environ.get("DASHBOARD_ALLOWED_ORIGIN", _default_dev_origins).split(",")
+    if o.strip()
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # tighten to your dashboard origin before public deploy
+    allow_origins=_origins,
     allow_methods=["GET", "POST"],
     allow_headers=["*"],
+    allow_credentials=True,
 )
 
 
@@ -99,7 +110,9 @@ async def client_detail(client_id: str) -> dict:
     if not client:
         raise HTTPException(404, "Client not found")
     client["sessions"] = await _fetch_all(
-        """SELECT id, started_at, ended_at, turn_count, total_cost_usd::float
+        """SELECT id, started_at, ended_at, turn_count,
+                  total_cost_usd::float AS total_cost_usd,
+                  intent
              FROM sessions
             WHERE client_id = $1
             ORDER BY started_at DESC
@@ -115,7 +128,8 @@ async def client_detail(client_id: str) -> dict:
 async def session_detail(session_id: str) -> dict:
     session = await _fetch_one(
         """SELECT id, client_id, started_at, ended_at, turn_count,
-                  total_cost_usd::float AS total_cost_usd
+                  total_cost_usd::float AS total_cost_usd,
+                  intent
              FROM sessions WHERE id = $1""",
         session_id,
     )

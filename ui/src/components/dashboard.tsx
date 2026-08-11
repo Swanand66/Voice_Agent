@@ -10,9 +10,33 @@ import {
   formatUsd,
   metricsApi,
   type Client,
+  type Intent,
   type Session,
   type Turn,
 } from "@/lib/metrics-api";
+
+const INTENT_STYLE: Record<Intent, string> = {
+  booking: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30",
+  inquiry: "bg-sky-500/15 text-sky-300 border-sky-500/30",
+  callback: "bg-amber-500/15 text-amber-300 border-amber-500/30",
+  complaint: "bg-red-500/15 text-red-300 border-red-500/30",
+  chat: "bg-violet-500/15 text-violet-300 border-violet-500/30",
+  refused: "bg-zinc-500/15 text-zinc-300 border-zinc-500/30",
+  other: "bg-white/5 text-muted-foreground border-white/10",
+};
+
+function IntentPill({ intent }: { intent: Intent | null }) {
+  if (!intent) {
+    return <span className="text-xs text-muted-foreground">—</span>;
+  }
+  return (
+    <span
+      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${INTENT_STYLE[intent]}`}
+    >
+      {intent}
+    </span>
+  );
+}
 
 type View =
   | { kind: "clients" }
@@ -248,6 +272,7 @@ function ClientDetail({
             <thead className="bg-white/5 text-left text-xs uppercase tracking-wider text-muted-foreground">
               <tr>
                 <th className="px-4 py-3 font-medium">Session</th>
+                <th className="px-4 py-3 font-medium">Intent</th>
                 <th className="px-4 py-3 font-medium">Started</th>
                 <th className="px-4 py-3 text-right font-medium">Turns</th>
                 <th className="px-4 py-3 text-right font-medium">Total</th>
@@ -261,6 +286,9 @@ function ClientDetail({
                   onClick={() => onSelectSession(s.id)}
                 >
                   <td className="px-4 py-3 font-mono text-xs">{s.id}</td>
+                  <td className="px-4 py-3">
+                    <IntentPill intent={s.intent} />
+                  </td>
                   <td className="px-4 py-3 text-muted-foreground">
                     {formatDate(s.started_at)}
                   </td>
