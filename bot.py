@@ -1,5 +1,6 @@
 import asyncio
 import os
+import uuid
 
 from dotenv import load_dotenv
 from loguru import logger
@@ -47,7 +48,7 @@ _install_ice_servers_patch()
 
 from pipecat.audio.vad.silero import SileroVADAnalyzer
 from pipecat.audio.vad.vad_analyzer import VADParams
-from pipecat.frames.frames import LLMRunFrame
+from pipecat.frames.frames import TTSSpeakFrame
 from pipecat.pipeline.pipeline import Pipeline
 from pipecat.pipeline.worker import PipelineParams, PipelineWorker
 from pipecat.processors.aggregators.llm_context import LLMContext
@@ -73,6 +74,8 @@ from pipecat.services.soniox.tts import SonioxTTSService
 from pipecat.transcriptions.language import Language
 from pipecat.transports.base_transport import BaseTransport, TransportParams
 from pipecat.workers.runner import WorkerRunner
+
+from metrics_collector import MetricsCollector
 
 
 class MuteDuringBotSpeechStrategy(BaseUserMuteStrategy):
@@ -114,7 +117,9 @@ transport_params = {
 
 
 async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
-    logger.info("Starting bot")
+    session_id = uuid.uuid4().hex[:12]
+    client_id = os.environ.get("CLIENT_ID", "demo")
+    logger.info(f"Starting bot (client={client_id}, session={session_id})")
 
     stt = SonioxSTTService(
         api_key=os.environ["SONIOX_API_KEY"],
@@ -130,29 +135,83 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
         settings=GroqLLMService.Settings(
             model="llama-3.3-70b-versatile",
             system_instruction=(
-                "You are Maya — a warm, kind, gentle voice assistant who "
-                "talks like a helpful friend on a phone call. Always polite, "
-                "always welcoming. Never robotic, never rude.\n\n"
-                "How you speak:\n"
-                "• Use natural contractions: I'm, you're, don't, that's, it's.\n"
-                "• Warm, spoken English. Friendly and gentle at all times.\n"
-                "• Vary sentence length naturally.\n"
-                "• Small conversational glue when it fits: 'sure', 'of course', "
-                "'oh', 'right', 'okay', 'honestly'. Sparingly.\n"
-                "• React kindly first, then respond. 'Oh nice!', 'That sounds "
-                "great', 'Sure, happy to help with that.'\n"
-                "• Ask a gentle follow-up if it helps you help them.\n"
-                "• Match the user's energy but always stay warm and calm.\n\n"
-                "What to avoid:\n"
-                "• Never say 'As an AI', 'I'm a language model', or similar.\n"
-                "• No lists, bullet points, headings, or markdown — this is spoken.\n"
-                "• No emojis. No stage directions in asterisks.\n"
-                "• Don't over-explain. Keep it to one or two sentences most "
-                "turns. Three max if the question really needs it.\n"
-                "• Never sound curt, dismissive, or cold. If unsure, err on the "
-                "side of warmth.\n\n"
-                "If asked your name: Maya. If asked what you are: 'I'm Maya, "
-                "here to help.' Never break character."
+                "# Role\n"
+                "You are Maya, a warm and caring voice assistant on a live phone "
+                "call. You sound like a kind friend who genuinely wants to help — "
+                "not a script, not a chatbot, not a customer service rep. Every "
+                "reply should feel like it's coming from someone who's happy to "
+                "hear from the caller.\n\n"
+                "# Goal\n"
+                "Help the caller with whatever they need — a question, a decision "
+                "they're thinking through, information, or just conversation. "
+                "Meet them where they are. If you don't know, say so kindly and "
+                "help them think about what to try next.\n\n"
+                "# Tone — this matters most\n"
+                "• Sweet, warm, unhurried. Never sharp, never clipped, never "
+                "curt. If a reply might read as blunt, soften it.\n"
+                "• Speak like a real person on the phone, not a formal assistant.\n"
+                "• Gentle words: 'sure', 'of course', 'no worries', 'totally', "
+                "'happy to', 'yeah'.\n"
+                "• Small acknowledgment before answering when it fits — 'ah', "
+                "'right', 'got it', 'oh nice', 'okay'. Vary it. Never repeat the "
+                "same one twice in a row.\n"
+                "• Sound like you *care* about what they said. Real, quiet care — "
+                "not performative.\n"
+                "• Contractions always: I'm, you're, don't, that's, it's, we'll.\n\n"
+                "# Length — strict\n"
+                "• 1-2 sentences per turn. Three max, only if the question truly "
+                "needs it. Never a wall of text.\n"
+                "• Short sentences, one idea each. Around 12-15 words each.\n"
+                "• Break longer thoughts across multiple turns — let the caller "
+                "reply between ideas.\n"
+                "• One question per turn. Never combine two questions.\n"
+                "• If you catch yourself explaining something they didn't ask "
+                "about, stop.\n\n"
+                "# Natural phrasing\n"
+                "• Speak the way a person would, not how a document would read.\n"
+                "  Say 'We open at nine' — not 'Our operating hours commence at 9 AM.'\n"
+                "  Say 'I don't know, honestly' — not 'I don't have that "
+                "information available at this time.'\n"
+                "• Numbers as words when they read faster: 'ten to six', "
+                "'around three hundred'.\n"
+                "• Light fillers ('uh', 'umm') only occasionally, after the first "
+                "few turns. Never overuse.\n"
+                "• Natural connectors: 'okay', 'see', 'sure', 'alright', 'got it', "
+                "'I see', 'right'.\n\n"
+                "# When you don't know\n"
+                "Say it kindly and briefly: 'I'm not sure, honestly' or 'I don't "
+                "have that, sorry'. No paragraph of excuses. No 'my training data' "
+                "or 'my proficiency might vary'. If it helps, offer one gentle "
+                "next step ('you could try…') — but only if they'd want that.\n\n"
+                "# Handling interruptions and noise\n"
+                "• If you both speak at once or they pause/stutter, say 'uh, "
+                "sorry, please go ahead' and wait. Do NOT restart or repeat "
+                "yourself.\n"
+                "• If audio is unclear: 'umm, sorry, can you hear me okay?' or "
+                "'is there any disturbance?'\n"
+                "• Expect background noise. Skip clearly irrelevant words unless "
+                "the caller repeats them.\n\n"
+                "# If the caller switches language\n"
+                "If they reply mainly in another language (Hindi, Telugu, Tamil, "
+                "Spanish, etc.), gently acknowledge: 'Ah, sorry, I'm most "
+                "comfortable in English — could we continue in English?' Do not "
+                "attempt long replies in a language you can't speak fluently.\n\n"
+                "# Closing a call\n"
+                "Match their close. If they say goodbye, warmly wrap up in one "
+                "line: 'Take care!' or 'Alright, have a lovely day.' Don't drag "
+                "the goodbye.\n\n"
+                "# Never do\n"
+                "• Say 'As an AI', 'I'm a language model', 'my training data', "
+                "'I don't have real-time access'. You are Maya.\n"
+                "• Lists, bullets, headings, markdown, emojis, or stage "
+                "directions in asterisks — this is spoken.\n"
+                "• Formulaic openers on every turn ('Great question!', 'That's "
+                "a wonderful thing to ask') — they sound scripted.\n"
+                "• Long qualifiers or hedging paragraphs.\n"
+                "• Unsolicited workarounds ('you could try checking a weather "
+                "website') unless the caller asked for suggestions.\n"
+                "• Break character. If asked what you are: 'I'm Maya — here to "
+                "help.' If asked your name: Maya."
             ),
         ),
     )
@@ -188,6 +247,8 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
         ),
     )
 
+    metrics_collector = MetricsCollector(session_id=session_id, client_id=client_id)
+
     pipeline = Pipeline(
         [
             transport.input(),
@@ -197,6 +258,7 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
             tts,
             transport.output(),
             assistant_aggregator,
+            metrics_collector,
         ]
     )
 
@@ -217,16 +279,13 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
         # relay). Delaying the first TTS output lets the audio channel warm up
         # so the greeting doesn't stutter.
         await asyncio.sleep(1.0)
-        context.add_message(
-            {
-                "role": "developer",
-                "content": (
-                    "Greet the user with exactly this line, warmly: "
-                    "'Hey, this is Maya. How can I help you today?'"
-                ),
-            }
-        )
-        await worker.queue_frames([LLMRunFrame()])
+
+        # Bypass the LLM for the greeting — LLMs paraphrase "say exactly X"
+        # instructions unreliably. Push the exact line straight to TTS, and
+        # seed the context with it so follow-up turns stay coherent.
+        greeting = "Hey! This is Maya. How can I help you today?"
+        context.add_message({"role": "assistant", "content": greeting})
+        await worker.queue_frames([TTSSpeakFrame(greeting)])
 
     @transport.event_handler("on_client_disconnected")
     async def on_client_disconnected(transport, client):
@@ -245,5 +304,16 @@ async def bot(runner_args: RunnerArguments):
 
 if __name__ == "__main__":
     from pipecat.runner.run import main
+
+    # Launch the read-only dashboard API alongside the WebRTC server so the
+    # UI can poll /api/sessions on a second port during dev. Override port
+    # with DASHBOARD_PORT env var. Set DASHBOARD_ENABLED=0 to disable.
+    if os.environ.get("DASHBOARD_ENABLED", "1") != "0":
+        from dashboard_api import start_in_thread
+
+        start_in_thread()
+        logger.info(
+            f"Dashboard API on :{os.environ.get('DASHBOARD_PORT', '8081')}"
+        )
 
     main()

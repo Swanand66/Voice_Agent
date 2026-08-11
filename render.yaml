@@ -16,6 +16,20 @@ services:
         sync: false
       - key: PIPECAT_IDLE_TIMEOUT_SECS
         value: "600"
+      # Dashboard sidecar binds to DASHBOARD_PORT (default 8081), which Render
+      # doesn't expose from a single web service. Disable here — deploy
+      # dashboard_api.py as a separate Render web service pointing at the
+      # same DATABASE_URL to get a public dashboard endpoint.
+      - key: DASHBOARD_ENABLED
+        value: "0"
+      # Supabase Postgres connection string (transaction pooler recommended).
+      - key: DATABASE_URL
+        sync: false
+      # Which client this bot deployment serves. Every session/turn is tagged
+      # with this ID so the dashboard can aggregate by client. Must match a
+      # row in the `clients` table.
+      - key: CLIENT_ID
+        sync: false
       # TURN server for WebRTC media relay (Render blocks direct UDP).
       # Get free credentials at metered.ca and set these in the Render dashboard.
       - key: TURN_URL

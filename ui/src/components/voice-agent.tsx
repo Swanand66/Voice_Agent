@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Mic, MicOff, Loader2 } from "lucide-react";
+import { Mic, MicOff, Loader2, BarChart3 } from "lucide-react";
 
 import { PipecatClient, RTVIEvent } from "@pipecat-ai/client-js";
 import {
@@ -15,6 +15,7 @@ import { GradientOrb } from "@/components/ui/gradient-orb";
 import { Button } from "@/components/ui/button";
 import { StarButton } from "@/components/ui/star-button";
 import { DotPattern } from "@/components/ui/dot-pattern";
+import { LiveCostPanel } from "@/components/live-cost-panel";
 import { cn } from "@/lib/utils";
 
 type BotState = "idle" | "connecting" | "listening" | "thinking" | "speaking";
@@ -111,17 +112,27 @@ function VoiceAgentInner() {
           <div className="text-xs font-medium tracking-widest text-muted-foreground sm:text-sm">
             MAYA
           </div>
-          <div className="flex shrink-0 items-center gap-2 rounded-full border border-border/50 bg-background/40 px-2.5 py-1 text-[11px] text-muted-foreground backdrop-blur sm:px-3 sm:text-xs">
-            <span
-              className={`h-2 w-2 shrink-0 rounded-full ${
-                state === "idle" ? "bg-muted-foreground" :
-                state === "connecting" ? "bg-yellow-400 animate-pulse" :
-                state === "speaking" ? "bg-blue-400 animate-pulse" :
-                state === "listening" ? "bg-green-400 animate-pulse" :
-                "bg-orange-400 animate-pulse"
-              }`}
-            />
-            {cfg.label}
+          <div className="flex items-center gap-2">
+            <a
+              href="#/dashboard"
+              className="flex items-center gap-1.5 rounded-full border border-border/50 bg-background/40 px-2.5 py-1 text-[11px] text-muted-foreground backdrop-blur transition hover:text-foreground sm:px-3 sm:text-xs"
+              aria-label="Open dashboard"
+            >
+              <BarChart3 className="h-3 w-3" />
+              Cost
+            </a>
+            <div className="flex shrink-0 items-center gap-2 rounded-full border border-border/50 bg-background/40 px-2.5 py-1 text-[11px] text-muted-foreground backdrop-blur sm:px-3 sm:text-xs">
+              <span
+                className={`h-2 w-2 shrink-0 rounded-full ${
+                  state === "idle" ? "bg-muted-foreground" :
+                  state === "connecting" ? "bg-yellow-400 animate-pulse" :
+                  state === "speaking" ? "bg-blue-400 animate-pulse" :
+                  state === "listening" ? "bg-green-400 animate-pulse" :
+                  "bg-orange-400 animate-pulse"
+                }`}
+              />
+              {cfg.label}
+            </div>
           </div>
         </header>
 
@@ -175,6 +186,12 @@ function VoiceAgentInner() {
           </StarButton>
         </footer>
       </div>
+
+      {connected && (
+        <div className="pointer-events-none absolute bottom-24 left-1/2 z-10 -translate-x-1/2 sm:left-6 sm:translate-x-0">
+          <LiveCostPanel active={connected} />
+        </div>
+      )}
 
       <PipecatClientAudio />
     </div>
