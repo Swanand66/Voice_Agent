@@ -19,12 +19,21 @@ Or let bot.py spawn it in a background thread (see bot.py main).
 from __future__ import annotations
 
 import os
+import sys
 import threading
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from loguru import logger
 
 from db import get_pool, close_pool
+
+
+# Structured JSON logs, same as bot.py. When the dashboard runs as its
+# own Render service this configures its logger; when imported by bot.py
+# the config there wins (loguru is a singleton, last add() reconfigures).
+logger.remove()
+logger.add(sys.stdout, serialize=True)
 
 
 app = FastAPI(title="Voice Agent Metrics")
