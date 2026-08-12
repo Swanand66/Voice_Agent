@@ -13,6 +13,22 @@ from loguru import logger
 logger.remove()
 logger.add(sys.stdout, serialize=True)
 
+
+# Sentry — catches every uncaught exception with stack trace + tagged
+# context. No-op if SENTRY_DSN isn't set. Traces are sampled at 10% to
+# stay inside free-tier limits.
+_sentry_dsn = os.environ.get("SENTRY_DSN")
+if _sentry_dsn:
+    import sentry_sdk
+
+    sentry_sdk.init(
+        dsn=_sentry_dsn,
+        traces_sample_rate=0.1,
+        send_default_pii=False,  # don't send caller audio/transcript
+        environment=os.environ.get("SENTRY_ENV", "production"),
+    )
+    logger.info("Sentry initialised")
+
 from pipecat.frames.frames import BotStartedSpeakingFrame, BotStoppedSpeakingFrame, Frame
 from pipecat.turns.user_mute.base_user_mute_strategy import BaseUserMuteStrategy
 

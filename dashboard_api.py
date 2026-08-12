@@ -36,6 +36,20 @@ logger.remove()
 logger.add(sys.stdout, serialize=True)
 
 
+# Sentry — same no-op-if-unset pattern as bot.py.
+_sentry_dsn = os.environ.get("SENTRY_DSN")
+if _sentry_dsn:
+    import sentry_sdk
+
+    sentry_sdk.init(
+        dsn=_sentry_dsn,
+        traces_sample_rate=0.1,
+        send_default_pii=False,
+        environment=os.environ.get("SENTRY_ENV", "production"),
+    )
+    logger.info("Sentry initialised")
+
+
 app = FastAPI(title="Voice Agent Metrics")
 
 # CORS allowlist. Set DASHBOARD_ALLOWED_ORIGIN as a comma-separated list of
