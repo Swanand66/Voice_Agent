@@ -109,7 +109,7 @@ function VoiceAgentInner() {
       <div className="relative z-10 flex h-full flex-col items-center justify-between px-4 py-6 sm:px-6 sm:py-10">
         <header className="flex w-full max-w-4xl items-center justify-between gap-3">
           <div className="text-xs font-medium tracking-widest text-muted-foreground sm:text-sm">
-            MAYA
+            CLARA
           </div>
           <div className="flex items-center gap-2">
             <a
@@ -138,7 +138,7 @@ function VoiceAgentInner() {
         <div className="flex w-full flex-col items-center gap-6 text-center sm:gap-8">
           <div className="w-full max-w-xl px-2">
             <h1 className="text-2xl font-medium tracking-tight text-foreground break-words sm:text-4xl md:text-5xl">
-              {connected ? cfg.label : "Say hello to Maya."}
+              {connected ? cfg.label : "Say hello to Clara."}
             </h1>
             <p className="mt-3 text-sm text-muted-foreground">
               {connected
