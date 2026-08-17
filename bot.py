@@ -163,7 +163,7 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
     llm = GroqLLMService(
         api_key=os.environ["GROQ_API_KEY"],
         settings=GroqLLMService.Settings(
-            model="llama-3.3-70b-versatile",
+            model="openai/gpt-oss-120b",
             system_instruction=(
                 "# Role\n"
                 "You are Clara, a warm and caring voice assistant on a live phone "

@@ -39,7 +39,7 @@ UNKNOWN_CONFIDENCE_THRESHOLD = 0.5
 # Bump when the prompt, label set, or coercion rules change so old rows
 # stay comparable in analytics.
 INTENT_VERSION = "v2"
-_MODEL = "llama-3.3-70b-versatile"
+_MODEL = "openai/gpt-oss-120b"
 
 _GROQ_TIMEOUT_SECS = 15
 
